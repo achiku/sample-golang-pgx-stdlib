@@ -1,0 +1,2 @@
+gom 'github.com/jackc/pgx'
+gom 'github.com/pkg/errors'
