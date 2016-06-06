@@ -72,3 +72,21 @@ func selectTime(ext Ext) (time.Time, error) {
 	}
 	return tm, nil
 }
+
+func insertValuePlainSQL(ext Ext, t pgx.NullTime) error {
+	_, err := ext.Exec(`INSERT INTO test (t) values ($1)`, t)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func insertValuePgxSQL(ext *sql.DB, t pgx.NullTime) error {
+	if driver, ok := ext.Driver().(*stdlib.Driver); ok && driver.Pool != nil {
+		_, err := driver.Pool.Exec(`INSERT INTO test (t) values ($1)`, t)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
