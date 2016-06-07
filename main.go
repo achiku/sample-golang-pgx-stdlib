@@ -10,6 +10,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var checkPidSQL = `select pg_backend_pid()`
+
 // Queryer is an interface used by Get and Select
 type Queryer interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)

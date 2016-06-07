@@ -176,7 +176,6 @@ func TestConnectionPoolWithStdlib(t *testing.T) {
 	db, cleanup := testCreateDB(t, 3)
 	defer cleanup()
 
-	checkPidSQL := `select pg_backend_pid()`
 	var n int
 	for i := 0; i <= 5; i++ {
 		if err := db.QueryRow(checkPidSQL).Scan(&n); err != nil {
@@ -191,7 +190,6 @@ func TestConnectionPoolWithPgx(t *testing.T) {
 	defer cleanup()
 
 	driver := db.Driver().(*stdlib.Driver)
-	checkPidSQL := `select pg_backend_pid()`
 	var n int
 	for i := 0; i <= 5; i++ {
 		if err := driver.Pool.QueryRow(checkPidSQL).Scan(&n); err != nil {
@@ -206,7 +204,6 @@ func TestConnectionPoolWithPgxAcquireCon(t *testing.T) {
 	defer cleanup()
 
 	driver := db.Driver().(*stdlib.Driver)
-	checkPidSQL := `select pg_backend_pid()`
 	var n int
 	for i := 0; i <= 5; i++ {
 		con, err := driver.Pool.Acquire()
