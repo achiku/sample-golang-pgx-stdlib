@@ -51,7 +51,7 @@ func NewDB(config *DBConfig) (*DB, error) {
 			Database: config.Database,
 			Port:     config.Port,
 		},
-		MaxConnections: 3,
+		MaxConnections: 4,
 	}
 	pool, err := pgx.NewConnPool(poolcfg)
 	if err != nil {

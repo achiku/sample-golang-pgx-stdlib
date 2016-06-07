@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/stdlib"
@@ -102,5 +103,58 @@ func TestInsertValuePgxSQL(t *testing.T) {
 			}
 			log.Printf("%d %v", i, ntm)
 		}
+	}
+}
+
+func TestConnectionAcquire(t *testing.T) {
+	db, cleanup := testCreateDB(t)
+	defer cleanup()
+
+	var tm time.Time
+	err := db.QueryRow(`SELECT now()`).Scan(&tm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Println(tm)
+
+	res, err := db.Exec(`INSERT INTO test (t) VALUES ($1)`, tm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Printf("%+v", res)
+
+	if driver, ok := db.Driver().(*stdlib.Driver); ok && driver.Pool != nil {
+		log.Printf("none ava:%d, cur:%d, max:%d",
+			driver.Pool.Stat().AvailableConnections, driver.Pool.Stat().CurrentConnections,
+			driver.Pool.Stat().MaxConnections)
+		conn1, err := driver.Pool.Acquire()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn1.Close()
+		log.Printf("first acquire ava:%d, cur:%d, max:%d",
+			driver.Pool.Stat().AvailableConnections, driver.Pool.Stat().CurrentConnections,
+			driver.Pool.Stat().MaxConnections)
+		log.Printf("%p", conn1)
+
+		conn2, err := driver.Pool.Acquire()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn2.Close()
+		log.Printf("second acquire ava:%d, cur:%d, max:%d",
+			driver.Pool.Stat().AvailableConnections, driver.Pool.Stat().CurrentConnections,
+			driver.Pool.Stat().MaxConnections)
+		log.Printf("%p", conn2)
+
+		conn3, err := driver.Pool.Acquire()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn3.Close()
+		log.Printf("third acquire ava:%d, cur:%d, max:%d",
+			driver.Pool.Stat().AvailableConnections, driver.Pool.Stat().CurrentConnections,
+			driver.Pool.Stat().MaxConnections)
+		log.Printf("%p", conn3)
 	}
 }
