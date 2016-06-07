@@ -9,13 +9,14 @@ import (
 	"github.com/jackc/pgx/stdlib"
 )
 
-func testCreateDB(t *testing.T) (*DB, func()) {
+func testCreateDB(t *testing.T, numConn int) (*DB, func()) {
 	cfg := &DBConfig{
 		Host:     "localhost",
 		User:     "pgtest",
 		Pass:     "",
 		Database: "pgtest",
 		Port:     5432,
+		NumConn:  numConn,
 	}
 	db, err := NewDB(cfg)
 	if err != nil {
@@ -55,7 +56,7 @@ func TestNewDB(t *testing.T) {
 }
 
 func TestSelectRow(t *testing.T) {
-	db, cleanup := testCreateDB(t)
+	db, cleanup := testCreateDB(t, 3)
 	defer cleanup()
 
 	tm, err := selectTime(db)
@@ -66,19 +67,31 @@ func TestSelectRow(t *testing.T) {
 }
 
 func TestInsertValuePlainSQL(t *testing.T) {
-	db, cleanup := testCreateDB(t)
+	db, cleanup := testCreateDB(t, 3)
 	defer cleanup()
 
-	tm := pgx.NullTime{
+	tm := nullTime{
 		Valid: false,
 	}
 	if err := insertValuePlainSQL(db, tm); err != nil {
 		t.Fatal(err)
 	}
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM test`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%d", n)
+
+	var id int
+	var tmt nullTime
+	if err := db.QueryRow(`SELECT id, t FROM test`).Scan(&id, &tmt); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%d %v", id, tmt)
 }
 
 func TestInsertValuePgxSQL(t *testing.T) {
-	db, cleanup := testCreateDB(t)
+	db, cleanup := testCreateDB(t, 3)
 	defer cleanup()
 
 	tm := pgx.NullTime{
@@ -107,7 +120,7 @@ func TestInsertValuePgxSQL(t *testing.T) {
 }
 
 func TestConnectionAcquire(t *testing.T) {
-	db, cleanup := testCreateDB(t)
+	db, cleanup := testCreateDB(t, 4)
 	defer cleanup()
 
 	var tm time.Time
@@ -156,5 +169,54 @@ func TestConnectionAcquire(t *testing.T) {
 			driver.Pool.Stat().AvailableConnections, driver.Pool.Stat().CurrentConnections,
 			driver.Pool.Stat().MaxConnections)
 		log.Printf("%p", conn3)
+	}
+}
+
+func TestConnectionPoolWithStdlib(t *testing.T) {
+	db, cleanup := testCreateDB(t, 3)
+	defer cleanup()
+
+	checkPidSQL := `select pg_backend_pid()`
+	var n int
+	for i := 0; i <= 5; i++ {
+		if err := db.QueryRow(checkPidSQL).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("pid: %d", n)
+	}
+}
+
+func TestConnectionPoolWithPgx(t *testing.T) {
+	db, cleanup := testCreateDB(t, 10)
+	defer cleanup()
+
+	driver := db.Driver().(*stdlib.Driver)
+	checkPidSQL := `select pg_backend_pid()`
+	var n int
+	for i := 0; i <= 5; i++ {
+		if err := driver.Pool.QueryRow(checkPidSQL).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("pid: %d", n)
+	}
+}
+
+func TestConnectionPoolWithPgxAcquireCon(t *testing.T) {
+	db, cleanup := testCreateDB(t, 7)
+	defer cleanup()
+
+	driver := db.Driver().(*stdlib.Driver)
+	checkPidSQL := `select pg_backend_pid()`
+	var n int
+	for i := 0; i <= 5; i++ {
+		con, err := driver.Pool.Acquire()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := con.QueryRow(checkPidSQL).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("pid: %d", n)
+		// driver.Pool.Release(con)
 	}
 }

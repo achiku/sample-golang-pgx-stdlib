@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"time"
 
 	"github.com/jackc/pgx"
@@ -39,6 +40,7 @@ type DBConfig struct {
 	Pass     string
 	Database string
 	Port     uint16
+	NumConn  int
 }
 
 // NewDB create DB
@@ -51,7 +53,7 @@ func NewDB(config *DBConfig) (*DB, error) {
 			Database: config.Database,
 			Port:     config.Port,
 		},
-		MaxConnections: 4,
+		MaxConnections: config.NumConn,
 	}
 	pool, err := pgx.NewConnPool(poolcfg)
 	if err != nil {
@@ -73,7 +75,24 @@ func selectTime(ext Ext) (time.Time, error) {
 	return tm, nil
 }
 
-func insertValuePlainSQL(ext Ext, t pgx.NullTime) error {
+type nullTime struct {
+	Time  time.Time
+	Valid bool
+}
+
+func (nt *nullTime) Scan(value interface{}) error {
+	nt.Time, nt.Valid = value.(time.Time)
+	return nil
+}
+
+func (nt nullTime) Value() (driver.Value, error) {
+	if !nt.Valid {
+		return nil, nil
+	}
+	return nt.Time, nil
+}
+
+func insertValuePlainSQL(ext Ext, t nullTime) error {
 	_, err := ext.Exec(`INSERT INTO test (t) values ($1)`, t)
 	if err != nil {
 		return err
