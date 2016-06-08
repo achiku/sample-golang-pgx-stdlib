@@ -32,7 +32,9 @@ func testCreateDB(t *testing.T, numConn int) (*DB, func()) {
 		t.Fatal(err)
 	}
 	cleanup := func() {
-		db.Exec(`DROP TABLE test`)
+		if _, err := db.Exec(`TRUNCATE TABLE test`); err != nil {
+			t.Fatal(err)
+		}
 		db.Close()
 	}
 	return db, cleanup
@@ -216,4 +218,43 @@ func TestConnectionPoolWithPgxAcquireCon(t *testing.T) {
 		t.Logf("pid: %d", n)
 		// driver.Pool.Release(con)
 	}
+}
+
+func TestPreparedStatementWithStdbli(t *testing.T) {
+	db, cleanup := testCreateDB(t, 3)
+	defer cleanup()
+
+	var tm time.Time
+	if err := db.QueryRow("select_row").Scan(&tm); err != nil {
+		t.Fatal(err)
+	}
+	t.Log(tm)
+}
+
+func TestPreparedStatementWithPool(t *testing.T) {
+	db, cleanup := testCreateDB(t, 3)
+	defer cleanup()
+
+	driver := db.Driver().(*stdlib.Driver)
+	var tm time.Time
+	if err := driver.Pool.QueryRow("select_row").Scan(&tm); err != nil {
+		t.Fatal(err)
+	}
+	t.Log(tm)
+}
+
+func TestPreparedStatementWithPgxConn(t *testing.T) {
+	db, cleanup := testCreateDB(t, 3)
+	defer cleanup()
+
+	driver := db.Driver().(*stdlib.Driver)
+	conn, err := driver.Pool.Acquire()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tm time.Time
+	if err := conn.QueryRow("select_row").Scan(&tm); err != nil {
+		t.Fatal(err)
+	}
+	t.Log(tm)
 }

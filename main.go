@@ -48,6 +48,7 @@ type DBConfig struct {
 // NewDB create DB
 func NewDB(config *DBConfig) (*DB, error) {
 	poolcfg := pgx.ConnPoolConfig{
+		AfterConnect: prepareStatements,
 		ConnConfig: pgx.ConnConfig{
 			Host:     config.Host,
 			User:     config.User,
@@ -106,6 +107,25 @@ func insertValuePgxSQL(ext *sql.DB, t pgx.NullTime) error {
 	if driver, ok := ext.Driver().(*stdlib.Driver); ok && driver.Pool != nil {
 		_, err := driver.Pool.Exec(`INSERT INTO test (t) values ($1)`, t)
 		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+const (
+	selectRow = `SELECT now()`
+	insertRow = `insert into test (t) values (now())`
+)
+
+var preparedStatements = map[string]string{
+	"select_row": selectRow,
+	"insert_row": insertRow,
+}
+
+func prepareStatements(conn *pgx.Conn) error {
+	for name, sql := range preparedStatements {
+		if _, err := conn.Prepare(name, sql); err != nil {
 			return err
 		}
 	}
