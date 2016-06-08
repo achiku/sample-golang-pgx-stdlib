@@ -115,12 +115,10 @@ func insertValuePgxSQL(ext *sql.DB, t pgx.NullTime) error {
 
 const (
 	selectRow = `SELECT now()`
-	insertRow = `insert into test (t) values (now())`
 )
 
 var preparedStatements = map[string]string{
 	"select_row": selectRow,
-	"insert_row": insertRow,
 }
 
 func prepareStatements(conn *pgx.Conn) error {

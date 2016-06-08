@@ -220,7 +220,7 @@ func TestConnectionPoolWithPgxAcquireCon(t *testing.T) {
 	}
 }
 
-func TestPreparedStatementWithStdbli(t *testing.T) {
+func TestPreparedStatementWithStdlib(t *testing.T) {
 	db, cleanup := testCreateDB(t, 3)
 	defer cleanup()
 
@@ -257,4 +257,43 @@ func TestPreparedStatementWithPgxConn(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(tm)
+}
+
+func countRow(t *testing.T, ext Ext) int {
+	var n int
+	if err := ext.QueryRow(`select count(*) from test`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+func insertRow(t *testing.T, ext Ext) {
+	_, err := ext.Exec(`insert into test (t) values (now())`)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTxAndDBWithStdlib(t *testing.T) {
+	db, cleanup := testCreateDB(t, 3)
+	defer cleanup()
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+
+	insertRow(t, db)
+	insertRow(t, tx)
+
+	t.Logf("db: %d", countRow(t, db))
+	t.Logf("tx: %d", countRow(t, tx))
+
+	tx.Rollback()
+
+	t.Logf("db: %d", countRow(t, db))
+	// t.Logf("tx: %d", countRow(t, tx))
+	insertRow(t, db)
+	t.Logf("db: %d", countRow(t, db))
 }
