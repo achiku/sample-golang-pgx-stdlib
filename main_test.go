@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"sync"
 	"testing"
 	"time"
 
@@ -296,4 +297,24 @@ func TestTxAndDBWithStdlib(t *testing.T) {
 	// t.Logf("tx: %d", countRow(t, tx))
 	insertRow(t, db)
 	t.Logf("db: %d", countRow(t, db))
+}
+
+func TestConnPoolingStdlib(t *testing.T) {
+	db, cleanup := testCreateDB(t, 10)
+	defer cleanup()
+
+	var wg sync.WaitGroup
+	numExec := 10
+	wg.Add(numExec)
+	for i := 0; i <= numExec-1; i++ {
+		go func() {
+			var n int
+			if err := db.QueryRow(checkPidSQL).Scan(&n); err != nil {
+				t.Error(err)
+			}
+			t.Logf("pid-%d: %d", i, n)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
