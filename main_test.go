@@ -318,3 +318,64 @@ func TestConnPoolingStdlib(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+var lockSQL = "SELECT pg_try_advisory_lock($1), pg_backend_pid()"
+
+func TestAdvisoryLockWithStdlib(t *testing.T) {
+	db, cleanup := testCreateDB(t, 3)
+	defer cleanup()
+
+	var wg sync.WaitGroup
+	numExec := 10
+	wg.Add(numExec)
+	for i := 0; i <= numExec-1; i++ {
+		go func() {
+			var (
+				locked bool
+				procID int
+			)
+			err := db.QueryRow(lockSQL, 1).Scan(&locked, &procID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("proc: %d -> lock: %t", procID, locked)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+}
+
+func TestAdvisoryLockWithPgx(t *testing.T) {
+	db, cleanup := testCreateDB(t, 3)
+	defer cleanup()
+
+	var wg sync.WaitGroup
+	numExec := 10
+	wg.Add(numExec)
+	for i := 0; i <= numExec-1; i++ {
+		go func() {
+			driver := db.Driver().(*stdlib.Driver)
+			conn, err := driver.Pool.Acquire()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var (
+				locked bool
+				procID int
+			)
+			err = conn.QueryRow(lockSQL, 1).Scan(&locked, &procID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			log.Printf("%d: proc: %d -> lock: %t", i, procID, locked)
+			err = conn.QueryRow(lockSQL, 1).Scan(&locked, &procID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			log.Printf("%d: proc: %d -> lock: %t", i, procID, locked)
+			driver.Pool.Release(conn)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+}
